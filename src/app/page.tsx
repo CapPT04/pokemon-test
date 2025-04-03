@@ -22,6 +22,7 @@ export default function Home() {
   const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [allPokemonLoaded, setAllPokemonLoaded] = useState<PokemonData[]>([]);
+  const [fetchedPages, setFetchedPages] = useState<{ [key: number]: PokemonData[] }>({});
   const itemsPerPage = 24;
 
   // Load types and page from URL on initial render
@@ -35,9 +36,9 @@ export default function Home() {
     }
 
     if (pageParam) {
-      const page = parseInt(pageParam) - 1; // Convert to 0-based index
-      if (!isNaN(page) && page >= 0) {
-        setCurrentPage(page);
+      const page = parseInt(pageParam); // Remove the -1 offset
+      if (!isNaN(page) && page >= 1) { // Change condition to check for page >= 1
+        setCurrentPage(page - 1); // Subtract 1 here to convert to 0-based index
       }
     }
   }, [searchParams]);
@@ -50,33 +51,56 @@ export default function Home() {
       params.set('type', selectedTypes.join(','));
     }
 
-    if (currentPage > 0) {
-      params.set('page', (currentPage + 1).toString());
-    }
+    // Add 1 to currentPage to show 1-based indexing in URL
+    params.set('page', (currentPage + 1).toString());
 
     const queryString = params.toString();
-    if (queryString) {
-      router.push(`?${queryString}`);
-    } else {
-      router.push('/');
-    }
+    router.push(`?${queryString}`, { scroll: false });
   }, [selectedTypes, currentPage, router]);
+
+  // Track if this is the initial load
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Initial load of Pokemon data when page changes (only for unfiltered view)
   useEffect(() => {
     async function loadPokemonData() {
       if (selectedTypes.length === 0) {
         try {
+          // If we already have data for this page, use it
+          if (fetchedPages[currentPage]) {
+            setPokemonData(fetchedPages[currentPage]);
+            setDisplayedPokemon(fetchedPages[currentPage]);
+            // Update pagination URLs
+            const listResponse = await fetchPokemonList(itemsPerPage, currentPage * itemsPerPage);
+            setNextPageUrl(listResponse.next);
+            setPrevPageUrl(listResponse.previous);
+            return;
+          }
+
           setIsLoading(true);
 
+          let offset = 0;
+          if (isInitialLoad) {
+            offset = currentPage * itemsPerPage;
+          } else {
+            offset = currentPage * itemsPerPage;
+          }
+
           // Fetch a larger initial set to get more types
-          const listResponse = await fetchPokemonList(itemsPerPage, currentPage * itemsPerPage);
+          const listResponse = await fetchPokemonList(itemsPerPage, offset);
           setTotalCount(listResponse.count);
           setNextPageUrl(listResponse.next);
           setPrevPageUrl(listResponse.previous);
           setTotalPages(Math.ceil(listResponse.count / itemsPerPage));
 
           const details = await fetchMultiplePokemonDetails(listResponse.results);
+
+          // Store the fetched data for this page
+          setFetchedPages(prev => ({
+            ...prev,
+            [currentPage]: details
+          }));
+
           setPokemonData(details);
           setAllFilteredPokemon(details);
           setDisplayedPokemon(details);
@@ -128,7 +152,7 @@ export default function Home() {
     }
 
     loadPokemonData();
-  }, [currentPage, selectedTypes.length, allPokemonLoaded.length, availableTypes.length]);
+  }, [currentPage, selectedTypes.length, allPokemonLoaded.length, availableTypes.length, isInitialLoad, fetchedPages]);
 
   // This effect is for filtering Pokemon when a type is selected
   useEffect(() => {
@@ -230,12 +254,19 @@ export default function Home() {
         } finally {
           setIsLoading(false);
         }
+      } else {
+        // When no types are selected, fetch the total count from the API
+        try {
+          const listResponse = await fetchPokemonList(1, 0);
+          setTotalCount(listResponse.count);
+          setTotalPages(Math.ceil(listResponse.count / itemsPerPage));
+        } catch (error) {
+          console.error("Error fetching total count:", error);
+        }
       }
     }
 
-    if (selectedTypes.length > 0) {
-      filterPokemonByType();
-    }
+    filterPokemonByType();
   }, [selectedTypes, allPokemonLoaded, searchParams]);
 
   // This effect updates the displayed Pokemon based on the current page and filtered Pokemon
@@ -250,84 +281,130 @@ export default function Home() {
       setDisplayedPokemon(allFilteredPokemon.slice(startIndex, endIndex));
     }
 
-    // Update pagination buttons availability
-    setPrevPageUrl(currentPage > 0 ? "available" : null);
-    setNextPageUrl(currentPage < totalPages - 1 ? "available" : null);
-  }, [allFilteredPokemon, currentPage, itemsPerPage, totalPages, pokemonData, selectedTypes.length]);
+    // Update pagination buttons availability based on conditions
+    if (selectedTypes.length === 0) {
+      if (isInitialLoad) {
+        // For initial load: 
+        // - Show next button only when on page 0
+        // - Show previous button only when on page 2
+        // - No buttons on page 1
+        setPrevPageUrl(currentPage === 2 ? "available" : null);
+        setNextPageUrl(currentPage === 0 ? "available" : null);
+      } else {
+        // For after deselecting types: show previous button when not on page 0
+        setPrevPageUrl(currentPage > 0 ? "available" : null);
+        setNextPageUrl(currentPage < totalPages - 1 ? "available" : null);
+      }
+    } else {
+      // For type filtering: show previous button when not on page 0
+      setPrevPageUrl(currentPage > 0 ? "available" : null);
+      setNextPageUrl(currentPage < totalPages - 1 ? "available" : null);
+    }
+  }, [allFilteredPokemon, currentPage, itemsPerPage, totalPages, pokemonData, selectedTypes.length, isInitialLoad]);
 
   const toggleType = (type: string) => {
     if (selectedTypes.includes(type)) {
       setSelectedTypes(selectedTypes.filter(t => t !== type));
+      // When deselecting types, mark as not initial load
+      setIsInitialLoad(false);
     } else {
       setSelectedTypes([...selectedTypes, type]);
     }
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1);
+    if (selectedTypes.length === 0 && isInitialLoad) {
+      // For initial load: jump to page 2 (showing Pokemon 48-71)
+      if (currentPage === 0) {
+        setCurrentPage(2);
+      }
+    } else {
+      // For other cases: go to next page
+      if (currentPage < totalPages - 1) {
+        setCurrentPage(currentPage + 1);
+      }
     }
   };
 
   const handlePrevPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
+    if (selectedTypes.length === 0 && isInitialLoad) {
+      // For initial load: go back to page 1 (showing Pokemon 24-47)
+      if (currentPage === 2) {
+        setCurrentPage(1);
+      }
+    } else {
+      // For other cases: go to previous page
+      if (currentPage > 0) {
+        setCurrentPage(currentPage - 1);
+      }
     }
   };
 
   return (
-    <div className="flex flex-col gap-4 px-10">
+    <div className="flex flex-col gap-4 px-10 relative">
+      {isLoading && (
+        <div className="">
+          Loading...
+        </div>
+      )}
       <h1 className="text-center">Welcome to Pokemon World</h1>
       <p className="">Total count: {totalCount}</p>
 
       <Filter
         selectedTypes={selectedTypes}
         toggleType={toggleType}
-        availableTypes={availableTypes}
-        isLoading={isLoading}
       />
 
       <section className="grid grid-cols-6 gap-x-16 gap-y-6">
-        {isLoading ? (
-          <div className="col-span-full flex justify-center py-8">
-            <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-2"></div>
-              <p>{selectedTypes.length > 0 ? "Loading all Pokémon with selected types..." : "Loading Pokémon..."}</p>
-            </div>
-          </div>
-        ) : displayedPokemon.length > 0 ? (
-          displayedPokemon.map((pokemon) => (
-            <PokemonCard
-              key={pokemon.id}
-              pokemon={pokemon}
-            />
-          ))
-        ) : (
-          <div className="col-span-full text-center py-8">
-            No Pokémon found with the selected type(s)
-          </div>
-        )}
+        {displayedPokemon.map((pokemon) => (
+          <PokemonCard
+            key={pokemon.id}
+            pokemon={pokemon}
+          />
+        ))}
       </section>
 
       <div className="flex justify-center gap-4 my-6">
-        {currentPage > 0 && (
-          <button
-            onClick={handlePrevPage}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-md ${isLoading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
-          >
-            Previous
-          </button>
-        )}
-
-        {currentPage < totalPages - 1 && (
-          <button
-            onClick={handleNextPage}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-md ${isLoading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
-          >
-            Next
-          </button>
+        {selectedTypes.length === 0 && isInitialLoad ? (
+          // For initial load: show buttons based on specific conditions
+          <>
+            {currentPage === 2 && (
+              <button
+                onClick={handlePrevPage}
+                className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                Previous
+              </button>
+            )}
+            {currentPage === 0 && (
+              <button
+                onClick={handleNextPage}
+                className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                Next
+              </button>
+            )}
+          </>
+        ) : (
+          // For other cases: show buttons based on current page
+          <>
+            {currentPage > 0 && (
+              <button
+                onClick={handlePrevPage}
+                className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                Previous
+              </button>
+            )}
+            {currentPage < totalPages - 1 && (
+              <button
+                onClick={handleNextPage}
+                className="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                Next
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
