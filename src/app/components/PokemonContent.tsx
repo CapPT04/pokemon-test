@@ -43,7 +43,7 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
     const [loading, setLoading] = useState<boolean>(forceLoading);
     const itemsPerPage = 24;
 
-    const { data: allPokemonData, error, isLoading, mutate } = useSWR<PokemonData[]>(
+    const { data: allPokemonData, error, isLoading } = useSWR<PokemonData[]>(
         'all-pokemon-data',
         fetchAllPokemon,
         {
@@ -58,33 +58,6 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
             errorRetryCount: 3,
         }
     );
-
-    useEffect(() => {
-        if (allPokemonData && allPokemonData.length > 0) {
-            initializeFromURL();
-        }
-    }, [allPokemonData]);
-
-    const initializeFromURL = useCallback(() => {
-        if (!allPokemonData) return;
-
-        const typeParam = searchParams.get('type');
-        const pageParam = searchParams.get('page');
-        const page = pageParam ? Math.max(0, parseInt(pageParam) - 1) : 0;
-
-        if (typeParam) {
-            const types = typeParam.split(',');
-            setSelectedTypes(types);
-
-            filterPokemonData(types, allPokemonData, page);
-        } else {
-            setSelectedTypes([]);
-            setAllFilteredPokemon(allPokemonData);
-            setTotalPages(Math.ceil(allPokemonData.length / itemsPerPage));
-            setCurrentPage(page);
-            updateDisplayedPokemon(allPokemonData, page);
-        }
-    }, [allPokemonData, searchParams, itemsPerPage]);
 
     const updateDisplayedPokemon = useCallback((pokemonList: PokemonData[], page: number) => {
         const startIndex = page * itemsPerPage;
@@ -160,6 +133,33 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
         updateDisplayedPokemon(sortedPokemon, page);
     }, [itemsPerPage, updateDisplayedPokemon]);
 
+    const initializeFromURL = useCallback(() => {
+        if (!allPokemonData) return;
+
+        const typeParam = searchParams.get('type');
+        const pageParam = searchParams.get('page');
+        const page = pageParam ? Math.max(0, parseInt(pageParam) - 1) : 0;
+
+        if (typeParam) {
+            const types = typeParam.split(',');
+            setSelectedTypes(types);
+
+            filterPokemonData(types, allPokemonData, page);
+        } else {
+            setSelectedTypes([]);
+            setAllFilteredPokemon(allPokemonData);
+            setTotalPages(Math.ceil(allPokemonData.length / itemsPerPage));
+            setCurrentPage(page);
+            updateDisplayedPokemon(allPokemonData, page);
+        }
+    }, [allPokemonData, searchParams, itemsPerPage, filterPokemonData, updateDisplayedPokemon]);
+
+    useEffect(() => {
+        if (allPokemonData && allPokemonData.length > 0) {
+            initializeFromURL();
+        }
+    }, [allPokemonData, initializeFromURL]);
+
     useEffect(() => {
         const params = new URLSearchParams();
 
@@ -221,6 +221,7 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
                 setSelectedTypes(types);
                 filterPokemonData(types, initialPokemonData, 0);
             } else {
+                setSelectedTypes([]);
                 setAllFilteredPokemon(initialPokemonData);
                 setTotalPages(Math.ceil(initialPokemonData.length / itemsPerPage));
                 setCurrentPage(0);
