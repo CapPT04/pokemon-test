@@ -7,7 +7,6 @@ type FilterProps = {
 };
 
 export const Filter = ({ selectedTypes, toggleType, availableTypes }: FilterProps) => {
-    // Default Pokemon types if availableTypes is not provided
     const defaultTypes = [
         "normal", "fighting", "flying", "poison", "ground",
         "rock", "bug", "ghost", "steel", "fire", "water",
@@ -15,7 +14,6 @@ export const Filter = ({ selectedTypes, toggleType, availableTypes }: FilterProp
         "dark", "fairy", "stellar", "unknown"
     ];
 
-    // Use available types if provided, otherwise use default list
     const pokemonTypes = availableTypes && availableTypes.length > 0
         ? availableTypes
         : defaultTypes;

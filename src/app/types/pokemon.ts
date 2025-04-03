@@ -1,5 +1,3 @@
-// Types for Pokemon API responses
-
 export interface PokemonListResponse {
     count: number;
     next: string | null;
@@ -34,7 +32,6 @@ export interface PokemonType {
     };
 }
 
-// Processed Pokemon for our UI
 export interface PokemonData {
     id: number | string;
     name: string;
@@ -43,4 +40,4 @@ export interface PokemonData {
     matchingTypes?: string[];
     slots?: number[] | Array<{ type: string; slot: number }>;
     url?: string;
-} 
+}
