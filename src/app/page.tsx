@@ -1,12 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Filter } from "./components/Filter";
 import { PokemonCard } from "./components/PokemonCard";
 import { fetchPokemonList, fetchMultiplePokemonDetails, fetchAllPokemon } from "./services/pokemonService";
 import { PokemonData } from "./types/pokemon";
 
-export default function Home() {
+// Create a client component that uses useSearchParams
+function PokemonContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -248,9 +249,9 @@ export default function Home() {
       } else {
         // When no types are selected, fetch the total count from the API
         try {
-          const listResponse = await fetchPokemonList(1, 0);
-          setTotalCount(listResponse.count);
-          setTotalPages(Math.ceil(listResponse.count / itemsPerPage));
+          const response = await fetchPokemonList(1, 0);
+          setTotalCount(response.count);
+          setTotalPages(Math.ceil(response.count / itemsPerPage));
         } catch (error) {
           console.error("Error fetching total count:", error);
         }
@@ -382,6 +383,15 @@ export default function Home() {
         )}
       </div>
     </div>
+  );
+}
+
+// Main component that wraps PokemonContent in a Suspense boundary
+export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PokemonContent />
+    </Suspense>
   );
 }
 
