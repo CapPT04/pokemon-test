@@ -35,10 +35,20 @@ interface PokemonContentProps {
 export function PokemonContent({ initialPokemonData = [], forceLoading = false }: PokemonContentProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+
+    // Đọc types từ URL ngay từ đầu
+    const initialTypeParam = searchParams.get('type');
+    const initialSelectedTypes = initialTypeParam ? initialTypeParam.split(',') : [];
+
+    const [selectedTypes, setSelectedTypes] = useState<string[]>(initialSelectedTypes);
     const [allFilteredPokemon, setAllFilteredPokemon] = useState<PokemonData[]>([]);
     const [displayedPokemon, setDisplayedPokemon] = useState<PokemonData[]>([]);
-    const [currentPage, setCurrentPage] = useState<number>(0);
+
+    // Đọc page từ URL ngay từ đầu
+    const initialPageParam = searchParams.get('page');
+    const initialPage = initialPageParam ? Math.max(0, parseInt(initialPageParam) - 1) : 0;
+
+    const [currentPage, setCurrentPage] = useState<number>(initialPage);
     const [totalPages, setTotalPages] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(forceLoading);
     const itemsPerPage = 24;
@@ -136,23 +146,15 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
     const initializeFromURL = useCallback(() => {
         if (!allPokemonData) return;
 
-        const typeParam = searchParams.get('type');
-        const pageParam = searchParams.get('page');
-        const page = pageParam ? Math.max(0, parseInt(pageParam) - 1) : 0;
-
-        if (typeParam) {
-            const types = typeParam.split(',');
-            setSelectedTypes(types);
-
-            filterPokemonData(types, allPokemonData, page);
+        // Chỉ cần áp dụng bộ lọc dựa trên các loại đã được khởi tạo từ URL
+        if (selectedTypes.length > 0) {
+            filterPokemonData(selectedTypes, allPokemonData, currentPage);
         } else {
-            setSelectedTypes([]);
             setAllFilteredPokemon(allPokemonData);
             setTotalPages(Math.ceil(allPokemonData.length / itemsPerPage));
-            setCurrentPage(page);
-            updateDisplayedPokemon(allPokemonData, page);
+            updateDisplayedPokemon(allPokemonData, currentPage);
         }
-    }, [allPokemonData, searchParams, itemsPerPage, filterPokemonData, updateDisplayedPokemon]);
+    }, [allPokemonData, selectedTypes, currentPage, itemsPerPage, filterPokemonData, updateDisplayedPokemon]);
 
     useEffect(() => {
         if (allPokemonData && allPokemonData.length > 0) {
@@ -161,6 +163,9 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
     }, [allPokemonData, initializeFromURL]);
 
     useEffect(() => {
+        // Không cập nhật URL khi đang tải
+        if (isLoading) return;
+
         const params = new URLSearchParams();
 
         if (selectedTypes.length > 0) {
@@ -215,20 +220,15 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
 
     useEffect(() => {
         if (initialPokemonData.length > 0 && !allPokemonData) {
-            const typeParam = searchParams.get('type');
-            if (typeParam) {
-                const types = typeParam.split(',');
-                setSelectedTypes(types);
-                filterPokemonData(types, initialPokemonData, 0);
+            if (selectedTypes.length > 0) {
+                filterPokemonData(selectedTypes, initialPokemonData, currentPage);
             } else {
-                setSelectedTypes([]);
                 setAllFilteredPokemon(initialPokemonData);
                 setTotalPages(Math.ceil(initialPokemonData.length / itemsPerPage));
-                setCurrentPage(0);
-                updateDisplayedPokemon(initialPokemonData, 0);
+                updateDisplayedPokemon(initialPokemonData, currentPage);
             }
         }
-    }, [initialPokemonData, allPokemonData, itemsPerPage, updateDisplayedPokemon, searchParams, filterPokemonData]);
+    }, [initialPokemonData, allPokemonData, itemsPerPage, updateDisplayedPokemon, selectedTypes, currentPage, filterPokemonData]);
 
     useEffect(() => {
         if (forceLoading) {
