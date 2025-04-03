@@ -5,7 +5,6 @@ import { Filter } from "./components/Filter";
 import { PokemonCard } from "./components/PokemonCard";
 import { fetchPokemonList, fetchMultiplePokemonDetails, fetchAllPokemon } from "./services/pokemonService";
 import { PokemonData } from "./types/pokemon";
-import styles from "./page.module.css";
 
 export default function Home() {
   const router = useRouter();
@@ -18,8 +17,6 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(0);
-  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
-  const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [allPokemonLoaded, setAllPokemonLoaded] = useState<PokemonData[]>([]);
   const [fetchedPages, setFetchedPages] = useState<{ [key: number]: PokemonData[] }>({});
@@ -70,10 +67,6 @@ export default function Home() {
           if (fetchedPages[currentPage]) {
             setPokemonData(fetchedPages[currentPage]);
             setDisplayedPokemon(fetchedPages[currentPage]);
-            // Update pagination URLs
-            const listResponse = await fetchPokemonList(itemsPerPage, currentPage * itemsPerPage);
-            setNextPageUrl(listResponse.next);
-            setPrevPageUrl(listResponse.previous);
             return;
           }
 
@@ -87,13 +80,11 @@ export default function Home() {
           }
 
           // Fetch a larger initial set to get more types
-          const listResponse = await fetchPokemonList(itemsPerPage, offset);
-          setTotalCount(listResponse.count);
-          setNextPageUrl(listResponse.next);
-          setPrevPageUrl(listResponse.previous);
-          setTotalPages(Math.ceil(listResponse.count / itemsPerPage));
+          const response = await fetchPokemonList(itemsPerPage, offset);
+          setTotalCount(response.count);
+          setTotalPages(Math.ceil(response.count / itemsPerPage));
 
-          const details = await fetchMultiplePokemonDetails(listResponse.results);
+          const details = await fetchMultiplePokemonDetails(response.results);
 
           // Store the fetched data for this page
           setFetchedPages(prev => ({
@@ -281,25 +272,8 @@ export default function Home() {
       setDisplayedPokemon(allFilteredPokemon.slice(startIndex, endIndex));
     }
 
-    // Update pagination buttons availability based on conditions
-    if (selectedTypes.length === 0) {
-      if (isInitialLoad) {
-        // For initial load: 
-        // - Show next button only when on page 0
-        // - Show previous button only when on page 2
-        // - No buttons on page 1
-        setPrevPageUrl(currentPage === 2 ? "available" : null);
-        setNextPageUrl(currentPage === 0 ? "available" : null);
-      } else {
-        // For after deselecting types: show previous button when not on page 0
-        setPrevPageUrl(currentPage > 0 ? "available" : null);
-        setNextPageUrl(currentPage < totalPages - 1 ? "available" : null);
-      }
-    } else {
-      // For type filtering: show previous button when not on page 0
-      setPrevPageUrl(currentPage > 0 ? "available" : null);
-      setNextPageUrl(currentPage < totalPages - 1 ? "available" : null);
-    }
+    // We don't need this pagination logic anymore since we're not using these variables
+    // Just keeping the dependency array as is
   }, [allFilteredPokemon, currentPage, itemsPerPage, totalPages, pokemonData, selectedTypes.length, isInitialLoad]);
 
   const toggleType = (type: string) => {

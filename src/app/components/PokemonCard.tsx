@@ -6,7 +6,7 @@ type PokemonCardProps = {
 };
 
 export const PokemonCard = ({ pokemon }: PokemonCardProps) => {
-    const { id, name, types, imageUrl } = pokemon;
+    const { id, name, imageUrl } = pokemon;
 
 
     return (
