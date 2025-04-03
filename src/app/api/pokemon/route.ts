@@ -9,23 +9,46 @@ let lastFetchTime = 0;
 const CACHE_TTL = 3600 * 1000;
 
 async function fetchPokemonList(limit = TOTAL_POKEMON_COUNT, offset = 0): Promise<PokemonListResponse> {
-    const response = await fetch(`${BASE_URL}/pokemon?limit=${limit}&offset=${offset}`, {
-        next: { revalidate: 86400 }
-    });
-    if (!response.ok) {
-        throw new Error('Failed to fetch Pokemon list');
+    try {
+        const response = await fetch(`${BASE_URL}/pokemon?limit=${limit}&offset=${offset}`, {
+            next: { revalidate: 86400 }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch Pokemon list');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching Pokemon list:", error);
+        return { count: 0, next: null, previous: null, results: [] };
     }
-    return await response.json();
 }
 
 async function fetchPokemonDetails(idOrName: string | number): Promise<Pokemon> {
-    const response = await fetch(`${BASE_URL}/pokemon/${idOrName}`, {
-        next: { revalidate: 86400 }
-    });
-    if (!response.ok) {
-        throw new Error(`Failed to fetch details for Pokemon: ${idOrName}`);
+    try {
+        const response = await fetch(`${BASE_URL}/pokemon/${idOrName}`, {
+            next: { revalidate: 86400 }
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch details for Pokemon: ${idOrName}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Error fetching details for Pokemon ${idOrName}:`, error);
+
+        return {
+            id: typeof idOrName === 'number' ? idOrName : 0,
+            name: typeof idOrName === 'string' ? idOrName : 'unknown',
+            types: [],
+            sprites: {
+                front_default: '',
+                other: {
+                    showdown: {
+                        front_default: ''
+                    }
+                }
+            }
+        };
     }
-    return await response.json();
 }
 
 function extractIdFromUrl(url: string): number {
@@ -34,6 +57,10 @@ function extractIdFromUrl(url: string): number {
 }
 
 async function fetchMultiplePokemonDetails(pokemonBasics: PokemonBasic[]): Promise<PokemonData[]> {
+    if (pokemonBasics.length === 0) {
+        return [];
+    }
+
     const batchSize = 20;
     const results: PokemonData[] = [];
 
@@ -104,9 +131,14 @@ export async function GET(request: Request) {
 
         console.log('Fetching fresh Pokemon data from PokeAPI...');
 
-        const response = await fetchPokemonList();
-
-        const allPokemon = await fetchMultiplePokemonDetails(response.results);
+        let allPokemon: PokemonData[] = [];
+        try {
+            const response = await fetchPokemonList();
+            allPokemon = await fetchMultiplePokemonDetails(response.results);
+        } catch (error) {
+            console.error("Critical error fetching Pokemon data:", error);
+            allPokemon = [];
+        }
 
         cachedPokemonData = allPokemon;
         lastFetchTime = now;
@@ -132,6 +164,13 @@ export async function GET(request: Request) {
         }
     } catch (error) {
         console.error("Error fetching all Pokemon:", error);
-        return NextResponse.json({ error: "Failed to fetch Pokemon data" }, { status: 500 });
+        return NextResponse.json([], {
+            status: 200,
+            headers: {
+                'Cache-Control': 'public, max-age=60',
+                'X-Pokemon-Count': '0',
+                'X-Error': 'Failed to fetch Pokemon data',
+            }
+        });
     }
 }

@@ -3,14 +3,12 @@ import { PokemonData } from "../types/pokemon";
 
 async function fetchPokemonData(): Promise<PokemonData[]> {
     try {
-        // Create a complete URL with protocol
         const baseUrl = process.env.VERCEL_URL
             ? `https://${process.env.VERCEL_URL}`
             : process.env.NODE_ENV === 'development'
                 ? 'http://localhost:3000'
                 : '';
 
-        // Use the complete URL with protocol
         const url = new URL('/api/pokemon', baseUrl || 'http://localhost:3000');
 
         const response = await fetch(url.toString(), {
@@ -35,6 +33,5 @@ async function fetchPokemonData(): Promise<PokemonData[]> {
 
 export async function PokemonDataProvider() {
     const pokemonData = await fetchPokemonData();
-
     return <PokemonContent initialPokemonData={pokemonData} forceLoading={true} />;
 }
