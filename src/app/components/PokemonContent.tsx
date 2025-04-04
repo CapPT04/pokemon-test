@@ -1,31 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import useSWR from 'swr';
 import { Filter } from "./Filter";
 import { PokemonCard } from "./PokemonCard";
 import { PokemonData } from "../types/pokemon";
-
-async function fetchAllPokemon(): Promise<PokemonData[]> {
-    try {
-        const timestamp = new Date().getTime();
-        const response = await fetch(`/api/pokemon?_t=${timestamp}`, {
-            headers: {
-                'x-fetch-source': 'client',
-                'x-request-time': timestamp.toString()
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch Pokemon data from API');
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error("Error fetching all Pokemon:", error);
-        throw error;
-    }
-}
 
 interface PokemonContentProps {
     initialPokemonData?: PokemonData[];
@@ -46,22 +24,8 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
     const [loading, setLoading] = useState<boolean>(forceLoading);
     const itemsPerPage = 24;
 
-    const { data: allPokemonData, error, isLoading } = useSWR<PokemonData[]>(
-        'all-pokemon-data',
-        fetchAllPokemon,
-        {
-            revalidateOnFocus: false,
-            revalidateOnReconnect: true,
-            dedupingInterval: 60000,
-            keepPreviousData: true,
-            fallbackData: initialPokemonData,
-            revalidateIfStale: false,
-            revalidateOnMount: initialPokemonData.length === 0,
-            refreshInterval: 0,
-            errorRetryCount: 3,
-        }
-    );
-
+    // Use the initialPokemonData provided by server directly
+    const [allPokemonData, setAllPokemonData] = useState<PokemonData[]>(initialPokemonData);
     const [initializedFromURL, setInitializedFromURL] = useState(false);
 
     const updateDisplayedPokemon = useCallback((pokemonList: PokemonData[], page: number) => {
@@ -139,7 +103,7 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
     }, [itemsPerPage, updateDisplayedPokemon]);
 
     const initializeFromURL = useCallback(() => {
-        if (!allPokemonData) return;
+        if (!allPokemonData || allPokemonData.length === 0) return;
 
         const typeParam = searchParams.get('type');
         const pageParam = searchParams.get('page');
@@ -169,6 +133,7 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
         }
     }, [allPokemonData, searchParams, itemsPerPage, filterPokemonData, updateDisplayedPokemon, selectedTypes, currentPage]);
 
+    // Initialize data from URL parameters when component loads
     useEffect(() => {
         if (allPokemonData && allPokemonData.length > 0 && !initializedFromURL) {
             initializeFromURL();
@@ -176,8 +141,9 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
         }
     }, [allPokemonData, initializeFromURL, initializedFromURL]);
 
+    // Update URL when filters or page change
     useEffect(() => {
-        if (isLoading) return;
+        if (!initializedFromURL) return;
 
         const params = new URLSearchParams();
 
@@ -192,7 +158,7 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
         if (queryString !== currentQuery) {
             router.push(`?${queryString}`, { scroll: false });
         }
-    }, [selectedTypes, currentPage, router, isLoading, searchParams]);
+    }, [selectedTypes, currentPage, router, initializedFromURL, searchParams]);
 
     useEffect(() => {
         if (allFilteredPokemon.length > 0) {
@@ -235,8 +201,10 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
 
     const totalCount = allFilteredPokemon.length;
 
+    // Initialize filtered data once when initial data is available
     useEffect(() => {
-        if (initialPokemonData.length > 0 && !allPokemonData) {
+        if (initialPokemonData.length > 0 && !initializedFromURL) {
+            setAllPokemonData(initialPokemonData);
             const typeParam = searchParams.get('type');
             if (typeParam) {
                 const types = typeParam.split(',');
@@ -250,7 +218,7 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
                 updateDisplayedPokemon(initialPokemonData, 0);
             }
         }
-    }, [initialPokemonData, allPokemonData, itemsPerPage, updateDisplayedPokemon, searchParams, filterPokemonData]);
+    }, [initialPokemonData, itemsPerPage, updateDisplayedPokemon, searchParams, filterPokemonData, initializedFromURL]);
 
     useEffect(() => {
         if (forceLoading) {
@@ -263,14 +231,14 @@ export function PokemonContent({ initialPokemonData = [], forceLoading = false }
         }
     }, [forceLoading]);
 
-    const isDataLoading = loading || (isLoading && (!allPokemonData || allPokemonData.length === 0));
+    const isDataLoading = loading || allPokemonData.length === 0;
 
     return (
         isDataLoading ? (
             <div className="">Loading...</div>
         ) : (
             <div className="flex flex-col gap-4 px-10 relative">
-                {error && (
+                {allPokemonData.length === 0 && (
                     <div className="text-red-500">
                         Error loading Pokemon data. Please refresh the page.
                     </div>
