@@ -2,6 +2,11 @@ import { PokemonContent } from "./PokemonContent";
 import { PokemonData } from "../types/pokemon";
 
 async function fetchPokemonData(): Promise<PokemonData[]> {
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+        console.log('Skipping data fetch during build phase');
+        return [];
+    }
+
     try {
         const baseUrl = process.env.VERCEL_URL
             ? `https://${process.env.VERCEL_URL}`
@@ -10,6 +15,8 @@ async function fetchPokemonData(): Promise<PokemonData[]> {
                 : '';
 
         const url = new URL('/api/pokemon', baseUrl || 'http://localhost:3000');
+
+        console.log(`Fetching Pokemon data from: ${url.toString()}`);
 
         const response = await fetch(url.toString(), {
             cache: 'force-cache',
