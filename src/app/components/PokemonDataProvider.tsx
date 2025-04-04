@@ -21,7 +21,7 @@ async function fetchPokemonData(): Promise<PokemonData[]> {
         const response = await fetch(url.toString(), {
             cache: 'force-cache',
             next: {
-                revalidate: 60,
+                revalidate: 3600,
                 tags: ['pokemon-data']
             }
         });
